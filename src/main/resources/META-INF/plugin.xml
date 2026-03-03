@@ -22,9 +22,6 @@
             <li>查看变更文件，支持差异对比</li>
             <li>批量合并提交到目标分支</li>
         </ul>
-        <br/>
-        <p><img src="https://imgbed.ligohan.com/file/1772529628789_main.png" alt="main shortcuts"/></p>
-        <p><img src="https://imgbed.ligohan.com/file/1772529624444_changedFiles.png" alt="changed files shortcuts"/></p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
