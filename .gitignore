@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.intellijPlatform
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+*.log
+
+# Claude Code
+.claude/

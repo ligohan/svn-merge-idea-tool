@@ -1,0 +1,38 @@
+<idea-plugin>
+    <id>com.svnmerge.helper</id>
+    <name>SVN Merge Helper</name>
+    <vendor>ligohan</vendor>
+    <description><![CDATA[
+        <h2>SVN Merge Helper</h2>
+        <br/>
+        <p>A plugin for SVN merge operations</p>
+        <br/>
+        <p>Features:</p>
+        <ul>
+            <li>Quick search and browse commit history across branches</li>
+            <li>View changed files with diff support</li>
+            <li>Batch merge commits from one branch to another</li>
+        </ul>
+        <br/>
+        <p>SVN 分支合并增强插件</p>
+        <br/>
+        <p>功能特性：</p>
+        <ul>
+            <li>快速搜索和浏览跨分支的提交记录</li>
+            <li>查看变更文件，支持差异对比</li>
+            <li>批量合并提交到目标分支</li>
+        </ul>
+        <br/>
+        <p><img src="https://imgbed.ligohan.com/file/1772529628789_main.png" alt="main shortcuts"/></p>
+        <p><img src="https://imgbed.ligohan.com/file/1772529624444_changedFiles.png" alt="changed files shortcuts"/></p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="SVN Merge Helper"
+                    anchor="right"
+                    icon="/image/icons/svnMerge.svg"
+                    factoryClass="com.svnmerge.SvnMergeToolWindowFactory"/>
+    </extensions>
+</idea-plugin>
