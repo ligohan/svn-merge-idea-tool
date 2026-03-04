@@ -170,6 +170,16 @@ public class SvnCommandExecutor {
     }
 
     /**
+     * 执行 svn status，用于检查工作副本状态（如是否存在冲突）
+     *
+     * @param workingDir 工作目录
+     * @return 命令执行结果
+     */
+    public Result status(String workingDir) {
+        return execute(workingDir, findSvn(), "status");
+    }
+
+    /**
      * 执行 svn update
      *
      * @param workingDir 工作目录

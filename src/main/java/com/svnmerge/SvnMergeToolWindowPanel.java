@@ -54,7 +54,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
     private static final int PRIMARY_BUTTON_HEIGHT = 30;
     private static final int SMALL_ACTION_BUTTON_HEIGHT = 18;
     private static final int BUTTON_ROW_HEIGHT = 42;
-    private static final int BUTTON_ROW_HGAP = 4;
+    private static final int BUTTON_ROW_HGAP = 6;
 
     private final Project project;
     private final SvnCommandExecutor executor = new SvnCommandExecutor();
@@ -82,6 +82,11 @@ public class SvnMergeToolWindowPanel extends JPanel {
     private boolean queryDone = false;
     /** 是否正在执行查询或合并操作 */
     private boolean operating = false;
+
+    /** 冲突等待面板，显示在插件内容区域上方 */
+    private JPanel conflictWaitingPanel;
+    private java.util.concurrent.atomic.AtomicBoolean conflictUserChoice;
+    private java.util.concurrent.CountDownLatch conflictLatch;
 
     public SvnMergeToolWindowPanel(Project project) {
         this.project = project;
@@ -501,6 +506,11 @@ public class SvnMergeToolWindowPanel extends JPanel {
         contentPanel.add(Box.createVerticalStrut(8));
 
         // 合并按钮行（合并 + 提交）
+        JButton revertButton = new JButton("还原");
+        styleButton(revertButton, new Color(0x3C3F41));
+        revertButton.setPreferredSize(new Dimension(PRIMARY_BUTTON_WIDTH, PRIMARY_BUTTON_HEIGHT));
+        revertButton.addActionListener(e -> doRevert());
+
         commitButton = new JButton("提交");
         styleButton(commitButton, new Color(0x4A90D9));
         commitButton.setPreferredSize(new Dimension(PRIMARY_BUTTON_WIDTH, PRIMARY_BUTTON_HEIGHT));
@@ -511,6 +521,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
         mergePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, BUTTON_ROW_HEIGHT));
         mergePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         mergePanel.add(mergeButton);
+        mergePanel.add(revertButton);
         mergePanel.add(commitButton);
         contentPanel.add(mergePanel);
         contentPanel.add(Box.createVerticalStrut(8));
@@ -1611,22 +1622,93 @@ public class SvnMergeToolWindowPanel extends JPanel {
 
             appendOutputLineRealtime("svn merge 开始");
             if (allSuccess) {
-                for (String rev : toMerge) {
-                    appendOutputLineRealtime("开始合并 r" + rev + "...");
+                for (int ri = 0; ri < toMerge.size(); ri++) {
+                    String rev = toMerge.get(ri);
+                    appendOutputLineRealtime("开始合并 r" + rev + "（" + (ri + 1) + "/" + toMerge.size() + "）...");
+                    List<String> conflictLines = new java.util.concurrent.CopyOnWriteArrayList<>();
                     SvnCommandExecutor.Result result = executor.merge(workingDir, branchUrl, rev, line -> {
                         String decodedLine = SvnCommandExecutor.decodeUnicodeEscapes(line);
                         if (decodedLine == null || decodedLine.trim().isEmpty()) return;
                         appendOutputLineRealtime(decodedLine);
+                        // 检测冲突：svn merge 输出中以 "C " 开头表示内容冲突
+                        String trimmed = decodedLine.trim();
+                        if (trimmed.matches("^C\\s+.*") || trimmed.matches("^TC\\s+.*")) {
+                            conflictLines.add(trimmed);
+                        }
                     });
-                    if (result.isSuccess()) {
-                        appendOutputLineRealtime(rev + " 合并成功");
+                    if (result.isSuccess() && conflictLines.isEmpty()) {
+                        appendOutputLineRealtime("r" + rev + " 合并成功");
                         mergedSuccessRevs.add(rev);
+                    } else if (!conflictLines.isEmpty()) {
+                        // 发现冲突，暂停后续合并
+                        appendOutputLineRealtime("r" + rev + " 合并产生冲突，共 " + conflictLines.size() + " 个冲突文件：");
+                        for (String cl : conflictLines) {
+                            appendOutputLineRealtime("  冲突：" + cl);
+                        }
+                        mergedSuccessRevs.add(rev);
+                        int remainCount = toMerge.size() - ri - 1;
+                        if (remainCount > 0) {
+                            appendOutputLineRealtime("暂停合并，请先解决冲突。剩余 " + remainCount + " 个版本待合并");
+                        } else {
+                            appendOutputLineRealtime("请先解决冲突后再提交");
+                        }
+                        // 刷新 VCS 变更列表，然后弹出冲突解决窗口
+                        java.util.concurrent.CountDownLatch conflictLatch = new java.util.concurrent.CountDownLatch(1);
+                        java.util.concurrent.atomic.AtomicBoolean userChoseContinue = new java.util.concurrent.atomic.AtomicBoolean(false);
+                        runOnUiThreadIfProjectAlive(() -> {
+                            try {
+                                refreshVcsChanges(() -> {
+                                    // 刷新完成后弹出冲突解决窗口
+                                    openResolveConflictsDialog();
+                                }, "合并冲突后刷新变更列表");
+                            } catch (Exception e) {
+                                appendOutputLineRealtime("刷新变更列表失败：" + e.getMessage());
+                            }
+                            // 延迟弹出非模态确认对话框，让冲突解决窗口先显示
+                            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(() -> {
+                                showConflictContinueDialog(userChoseContinue, conflictLatch);
+                            });
+                        });
+                        // 等待用户解决冲突
+                        try {
+                            conflictLatch.await();
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            appendOutputLineRealtime("等待冲突解决被中断");
+                            allSuccess = false;
+                            break;
+                        }
+                        // 检查用户是否选择了停止合并
+                        if (!userChoseContinue.get()) {
+                            appendOutputLineRealtime("用户选择停止合并");
+                            allSuccess = false;
+                            break;
+                        }
+                        // 检查冲突是否已全部解决
+                        SvnCommandExecutor.Result statusResult = executor.status(workingDir);
+                        boolean stillHasConflict = false;
+                        if (statusResult.isSuccess() && statusResult.stdout != null) {
+                            for (String statusLine : statusResult.stdout.split("\n")) {
+                                String st = statusLine.trim();
+                                if (st.startsWith("C ") || (st.length() > 6 && st.charAt(6) == 'C')) {
+                                    stillHasConflict = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (stillHasConflict) {
+                            appendOutputLineRealtime("仍有未解决的冲突，停止后续合并");
+                            allSuccess = false;
+                            break;
+                        }
+                        appendOutputLineRealtime("冲突已解决，继续合并下一个版本");
                     } else {
                         String mergeError = SvnCommandExecutor.decodeUnicodeEscapes(result.stderr);
-                        String failLine = rev + " 合并失败"
+                        String failLine = "r" + rev + " 合并失败"
                                 + (mergeError == null || mergeError.trim().isEmpty() ? "" : "：" + mergeError.trim());
                         appendOutputLineRealtime(failLine);
                         allSuccess = false;
+                        break;
                     }
                 }
             }
@@ -1835,6 +1917,140 @@ public class SvnMergeToolWindowPanel extends JPanel {
         }
         actionManager.tryToExecute(action,
                 null, this, com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN, true);
+    }
+
+    private void doRevert() {
+        if (isProjectDisposedSafe()) return;
+        com.intellij.openapi.actionSystem.ActionManager actionManager =
+                com.intellij.openapi.actionSystem.ActionManager.getInstance();
+        com.intellij.openapi.actionSystem.AnAction action =
+                actionManager.getAction("ChangesView.Revert");
+        if (action == null) {
+            outputArea.setText("无法找到 Revert 操作");
+            return;
+        }
+        actionManager.tryToExecute(action,
+                null, this, com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN, true);
+    }
+
+    private void openResolveConflictsDialog() {
+        if (isProjectDisposedSafe()) return;
+        // 尝试多种方式激活 Local Changes / Commit 视图
+        com.intellij.openapi.wm.ToolWindowManager twm =
+                com.intellij.openapi.wm.ToolWindowManager.getInstance(project);
+        // 尝试不同的 ToolWindow ID（新版 IDEA 用 Commit，旧版用 Version Control）
+        String[] toolWindowIds = {"Commit", "Version Control", "Changes"};
+        for (String id : toolWindowIds) {
+            com.intellij.openapi.wm.ToolWindow tw = twm.getToolWindow(id);
+            if (tw != null && tw.isAvailable()) {
+                tw.activate(() -> {
+                    // 激活后选中 Local Changes tab
+                    com.intellij.ui.content.Content content = tw.getContentManager().findContent("Local Changes");
+                    if (content != null) {
+                        tw.getContentManager().setSelectedContent(content);
+                    }
+                });
+                return;
+            }
+        }
+    }
+
+    /**
+     * 在插件窗口正中间显示冲突等待面板（内嵌在插件窗口内部，使用 GlassPane）
+     */
+    private void showConflictContinueDialog(
+            java.util.concurrent.atomic.AtomicBoolean userChoseContinue,
+            java.util.concurrent.CountDownLatch latch) {
+        this.conflictUserChoice = userChoseContinue;
+        this.conflictLatch = latch;
+
+        // 移除旧面板（如果存在）
+        if (conflictWaitingPanel != null) {
+            this.remove(conflictWaitingPanel);
+        }
+
+        // 创建悬浮面板
+        JPanel innerPanel = new JPanel(new BorderLayout(0, 12));
+        innerPanel.setBackground(new Color(0x3C3F41));
+        innerPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(0xE6A23C), 2),
+                BorderFactory.createEmptyBorder(16, 20, 16, 20)
+        ));
+
+        JLabel msgLabel = new JLabel(
+                "<html><div style='text-align:center;'>"
+                        + "<span style='color:#E6A23C;font-weight:bold;font-size:14px;'>发现冲突</span><br><br>"
+                        + "请在 IDE 中解决所有冲突后，点击「继续合并」。</div></html>",
+                SwingConstants.CENTER);
+        msgLabel.setForeground(Color.WHITE);
+        innerPanel.add(msgLabel, BorderLayout.CENTER);
+
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 0));
+        btnPanel.setOpaque(false);
+        JButton continueBtn = new JButton("继续合并");
+        JButton stopBtn = new JButton("停止合并");
+        styleButton(continueBtn, new Color(0x67C23A));
+        styleButton(stopBtn, new Color(0x909399));
+        continueBtn.setPreferredSize(new Dimension(90, 30));
+        stopBtn.setPreferredSize(new Dimension(90, 30));
+        btnPanel.add(stopBtn);
+        btnPanel.add(continueBtn);
+        innerPanel.add(btnPanel, BorderLayout.SOUTH);
+
+        continueBtn.addActionListener(ev -> onConflictChoice(true));
+        stopBtn.addActionListener(ev -> onConflictChoice(false));
+
+        // 创建一个覆盖整个插件窗口的半透明遮罩层，内部居中显示面板
+        conflictWaitingPanel = new JPanel(new GridBagLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                // 半透明背景遮罩
+                g.setColor(new Color(0, 0, 0, 120));
+                g.fillRect(0, 0, getWidth(), getHeight());
+            }
+        };
+        conflictWaitingPanel.setOpaque(false);
+        conflictWaitingPanel.add(innerPanel);
+
+        // 使用 OverlayLayout 将遮罩层覆盖在内容之上
+        this.setLayout(new OverlayLayout(this));
+        // 先移除所有组件，重新添加
+        Component[] components = this.getComponents();
+        this.removeAll();
+        // 先添加遮罩（会显示在最上层）
+        this.add(conflictWaitingPanel);
+        // 再添加原有内容
+        for (Component comp : components) {
+            if (comp != conflictWaitingPanel) {
+                this.add(comp);
+            }
+        }
+        this.revalidate();
+        this.repaint();
+    }
+
+    private void onConflictChoice(boolean continueChoice) {
+        if (conflictWaitingPanel != null) {
+            // 移除遮罩层，恢复原来的 BorderLayout
+            this.remove(conflictWaitingPanel);
+            Component[] components = this.getComponents();
+            this.removeAll();
+            this.setLayout(new BorderLayout());
+            for (Component comp : components) {
+                this.add(comp, BorderLayout.CENTER);
+                break; // 只有一个主内容组件
+            }
+            conflictWaitingPanel = null;
+            this.revalidate();
+            this.repaint();
+        }
+        if (conflictUserChoice != null) {
+            conflictUserChoice.set(continueChoice);
+        }
+        if (conflictLatch != null) {
+            conflictLatch.countDown();
+        }
     }
 
     private void setButtonsEnabled(boolean enabled) {

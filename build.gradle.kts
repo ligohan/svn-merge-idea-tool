@@ -26,6 +26,9 @@ java {
 }
 
 intellijPlatform {
+    // 当前插件未提供 Settings/Configurable，关闭 searchable options 生成可避免无意义的 IDE 启动与联网等待。
+    buildSearchableOptions = false
+
     pluginConfiguration {
         id = "com.svnmerge.helper"
         name = "SVN Merge Helper"
