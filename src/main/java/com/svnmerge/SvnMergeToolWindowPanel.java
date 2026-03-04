@@ -5,6 +5,7 @@ import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.vcs.changes.ChangeListManager;
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager;
 import com.intellij.openapi.vfs.VirtualFileManager;
@@ -741,6 +742,22 @@ public class SvnMergeToolWindowPanel extends JPanel {
     }
 
     /** 为对话框注册 Cmd+W / Ctrl+W 关闭快捷键 */
+    private static void registerCloseShortcut(DialogWrapper dialogWrapper) {
+        JRootPane rootPane = dialogWrapper.getRootPane();
+        if (rootPane == null) return;
+        int modifier = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        KeyStroke closeKey = KeyStroke.getKeyStroke(KeyEvent.VK_W, modifier);
+        rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+                .put(closeKey, "closeDialog");
+        rootPane.getActionMap().put("closeDialog", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                dialogWrapper.close(DialogWrapper.CANCEL_EXIT_CODE);
+            }
+        });
+    }
+
+    /** 为 JDialog 注册 Cmd+W / Ctrl+W 关闭快捷键 */
     private static void registerCloseShortcut(JDialog dialog) {
         JRootPane rootPane = dialog.getRootPane();
         int modifier = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
@@ -756,9 +773,9 @@ public class SvnMergeToolWindowPanel extends JPanel {
     }
 
     /** 创建底部关闭按钮面板 */
-    private static JPanel createCloseButtonPanel(JDialog dialog) {
+    private static JPanel createCloseButtonPanel(DialogWrapper dialogWrapper) {
         JButton closeBtn = new JButton("关闭");
-        closeBtn.addActionListener(e -> dialog.dispose());
+        closeBtn.addActionListener(e -> dialogWrapper.close(DialogWrapper.CANCEL_EXIT_CODE));
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 6));
         panel.add(closeBtn);
         return panel;
@@ -922,6 +939,33 @@ public class SvnMergeToolWindowPanel extends JPanel {
             fileTree.expandRow(i);
         }
 
+        DialogWrapper dialogWrapper = new DialogWrapper(project, true) {
+            {
+                setTitle("r" + entry.revision + " 变动文件");
+                setModal(false);
+                init();
+            }
+
+            @Override
+            protected JComponent createCenterPanel() {
+                JBScrollPane scrollPane = new JBScrollPane(fileTree);
+                scrollPane.setPreferredSize(new Dimension(600, 500));
+                scrollPane.setMinimumSize(new Dimension(400, 250));
+                return scrollPane;
+            }
+
+            @Override
+            protected Action[] createActions() {
+                // 不显示默认的 OK/Cancel 按钮
+                return new Action[0];
+            }
+
+            @Override
+            protected JComponent createSouthPanel() {
+                return createCloseButtonPanel(this);
+            }
+        };
+
         // 双击叶子节点打开 diff
         fileTree.addMouseListener(new MouseAdapter() {
             @Override
@@ -941,29 +985,15 @@ public class SvnMergeToolWindowPanel extends JPanel {
                             (DefaultMutableTreeNode) treePath.getLastPathComponent();
                     if (node.getUserObject() instanceof FileNodeData) {
                         FileNodeData data = (FileNodeData) node.getUserObject();
-                        showDiffDialog(entry.revision, branchUrl, data.relativePath, data.action);
+                        showDiffDialog(entry.revision, branchUrl, data.relativePath, data.action,
+                                dialogWrapper.getWindow());
                     }
                 }
             }
         });
 
-        JBScrollPane scrollPane = new JBScrollPane(fileTree);
-
-        Window ideWindow = SwingUtilities.getWindowAncestor(this);
-        JDialog dialog = new JDialog(ideWindow,
-                "r" + entry.revision + " 变动文件",
-                Dialog.ModalityType.MODELESS);
-
-        JPanel contentPane = new JPanel(new BorderLayout());
-        contentPane.add(scrollPane, BorderLayout.CENTER);
-        contentPane.add(createCloseButtonPanel(dialog), BorderLayout.SOUTH);
-        dialog.setContentPane(contentPane);
-
-        dialog.setSize(1000, 800);
-        dialog.setMinimumSize(new Dimension(400, 250));
-        dialog.setLocationRelativeTo(ideWindow);
-        registerCloseShortcut(dialog);
-        dialog.setVisible(true);
+        registerCloseShortcut(dialogWrapper);
+        dialogWrapper.show();
     }
 
     /**
@@ -991,7 +1021,8 @@ public class SvnMergeToolWindowPanel extends JPanel {
     }
 
     /** 使用 IDEA 内置 Diff Viewer 显示单个文件的变更 */
-    private void showDiffDialog(String revision, String branchUrl, String filePath, String action) {
+    private void showDiffDialog(String revision, String branchUrl, String filePath, String action,
+            Window ownerWindow) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             long revNum = Long.parseLong(revision);
             String oldRevision = String.valueOf(revNum - 1);
@@ -1036,7 +1067,17 @@ public class SvnMergeToolWindowPanel extends JPanel {
                                 leftContent, rightContent,
                                 "r" + oldRevision, "r" + revision);
 
-                com.intellij.diff.DiffManager.getInstance().showDiff(project, request);
+                com.intellij.diff.DiffDialogHints hints = new com.intellij.diff.DiffDialogHints(
+                        com.intellij.openapi.ui.WindowWrapper.Mode.NON_MODAL,
+                        ownerWindow,
+                        wrapper -> com.intellij.openapi.util.Disposer.register(wrapper, () ->
+                                SwingUtilities.invokeLater(() -> {
+                                    if (ownerWindow != null && ownerWindow.isShowing()) {
+                                        ownerWindow.toFront();
+                                        ownerWindow.requestFocus();
+                                    }
+                                })));
+                com.intellij.diff.DiffManager.getInstance().showDiff(project, request, hints);
             });
         });
     }
