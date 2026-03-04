@@ -1,8 +1,8 @@
 package com.svnmerge;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.WriteIntentReadAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vcs.changes.ChangeListManager;
@@ -13,9 +13,8 @@ import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
 
-import com.intellij.icons.AllIcons;
-
 import javax.swing.*;
+import javax.swing.text.DefaultCaret;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -24,7 +23,8 @@ import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
@@ -49,6 +49,11 @@ public class SvnMergeToolWindowPanel extends JPanel {
     private static final int REVISION_INPUT_HEIGHT = 100;
     private static final int REVISION_INPUT_HAN_CHARS = 11;
     private static final int REVISION_INPUT_EXTRA_WIDTH = 28;
+    private static final int PRIMARY_BUTTON_WIDTH = 78;
+    private static final int PRIMARY_BUTTON_HEIGHT = 30;
+    private static final int SMALL_ACTION_BUTTON_HEIGHT = 18;
+    private static final int BUTTON_ROW_HEIGHT = 42;
+    private static final int BUTTON_ROW_HGAP = 4;
 
     private final Project project;
     private final SvnCommandExecutor executor = new SvnCommandExecutor();
@@ -97,8 +102,8 @@ public class SvnMergeToolWindowPanel extends JPanel {
         autoFetchButton.setFont(autoFetchButton.getFont().deriveFont(Font.PLAIN, 12f));
         autoFetchButton.setForeground(new Color(0x4A90D9));
         autoFetchButton.setBorder(BorderFactory.createLineBorder(new Color(0x4A90D9)));
-        autoFetchButton.setPreferredSize(new Dimension(68, 20));
-        autoFetchButton.setMaximumSize(new Dimension(68, 20));
+        autoFetchButton.setPreferredSize(new Dimension(66, SMALL_ACTION_BUTTON_HEIGHT));
+        autoFetchButton.setMaximumSize(new Dimension(66, SMALL_ACTION_BUTTON_HEIGHT));
         branchLabelPanel.add(autoFetchButton);
         contentPanel.add(branchLabelPanel);
         contentPanel.add(Box.createVerticalStrut(4));
@@ -131,13 +136,13 @@ public class SvnMergeToolWindowPanel extends JPanel {
         contentPanel.add(Box.createVerticalStrut(4));
 
         // 加载按钮行（加载 + 数字输入框 + 条）
-        JPanel loadPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        loadPanel.setBorder(BorderFactory.createEmptyBorder(0, -2, 0, 0));
-        loadPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        JPanel loadPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, BUTTON_ROW_HGAP, 0));
+        loadPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        loadPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, BUTTON_ROW_HEIGHT));
         loadPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         loadButton = new JButton("加载");
         styleButton(loadButton, new Color(0x3C3F41));
-        loadButton.setPreferredSize(new Dimension(80, 32));
+        loadButton.setPreferredSize(new Dimension(PRIMARY_BUTTON_WIDTH, PRIMARY_BUTTON_HEIGHT));
         loadPanel.add(loadButton);
         loadLimitField = new JBTextField("30");
         loadLimitField.setHorizontalAlignment(JTextField.CENTER);
@@ -250,13 +255,13 @@ public class SvnMergeToolWindowPanel extends JPanel {
         contentPanel.add(Box.createVerticalStrut(4));
 
         // 搜索按钮行
-        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        searchPanel.setBorder(BorderFactory.createEmptyBorder(0, -2, 0, 0));
-        searchPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, BUTTON_ROW_HGAP, 0));
+        searchPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        searchPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, BUTTON_ROW_HEIGHT));
         searchPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         searchButton = new JButton("搜索");
         styleButton(searchButton, new Color(0x3C3F41));
-        searchButton.setPreferredSize(new Dimension(80, 32));
+        searchButton.setPreferredSize(new Dimension(PRIMARY_BUTTON_WIDTH, PRIMARY_BUTTON_HEIGHT));
         searchPanel.add(searchButton);
         contentPanel.add(searchPanel);
         contentPanel.add(Box.createVerticalStrut(8));
@@ -281,13 +286,13 @@ public class SvnMergeToolWindowPanel extends JPanel {
         contentPanel.add(Box.createVerticalStrut(8));
 
         // 查询按钮行
-        JPanel queryPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        queryPanel.setBorder(BorderFactory.createEmptyBorder(0, -2, 0, 0));
-        queryPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        JPanel queryPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, BUTTON_ROW_HGAP, 0));
+        queryPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        queryPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, BUTTON_ROW_HEIGHT));
         queryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         queryButton = new JButton("查询");
         styleButton(queryButton, new Color(0x3C3F41));
-        queryButton.setPreferredSize(new Dimension(80, 32));
+        queryButton.setPreferredSize(new Dimension(PRIMARY_BUTTON_WIDTH, PRIMARY_BUTTON_HEIGHT));
         queryPanel.add(queryButton);
         queryAppendCheckBox = new JCheckBox("追加");
         queryPanel.add(queryAppendCheckBox);
@@ -296,7 +301,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
 
         mergeButton = new JButton("合并");
         styleButton(mergeButton, new Color(0x4A90D9));
-        mergeButton.setPreferredSize(new Dimension(80, 32));
+        mergeButton.setPreferredSize(new Dimension(PRIMARY_BUTTON_WIDTH, PRIMARY_BUTTON_HEIGHT));
 
         // 提交信息标题行（标签 + 删除/清空按钮）
         JPanel logLabelPanel = new JPanel();
@@ -315,16 +320,16 @@ public class SvnMergeToolWindowPanel extends JPanel {
         deleteSelectedButton.setFont(deleteSelectedButton.getFont().deriveFont(Font.PLAIN, 12f));
         deleteSelectedButton.setForeground(new Color(0x4A90D9));
         deleteSelectedButton.setBorder(BorderFactory.createLineBorder(new Color(0x4A90D9)));
-        int logActionButtonWidth = getHanTextWidth(deleteSelectedButton, 2) + 12;
-        deleteSelectedButton.setPreferredSize(new Dimension(logActionButtonWidth, 20));
-        deleteSelectedButton.setMaximumSize(new Dimension(logActionButtonWidth, 20));
+        int logActionButtonWidth = getHanTextWidth(deleteSelectedButton, 2) + 10;
+        deleteSelectedButton.setPreferredSize(new Dimension(logActionButtonWidth, SMALL_ACTION_BUTTON_HEIGHT));
+        deleteSelectedButton.setMaximumSize(new Dimension(logActionButtonWidth, SMALL_ACTION_BUTTON_HEIGHT));
         JButton clearButton = new JButton("清空");
         clearButton.setMargin(new Insets(0, 4, 0, 4));
         clearButton.setFont(clearButton.getFont().deriveFont(Font.PLAIN, 12f));
         clearButton.setForeground(new Color(0x4A90D9));
         clearButton.setBorder(BorderFactory.createLineBorder(new Color(0x4A90D9)));
-        clearButton.setPreferredSize(new Dimension(logActionButtonWidth, 20));
-        clearButton.setMaximumSize(new Dimension(logActionButtonWidth, 20));
+        clearButton.setPreferredSize(new Dimension(logActionButtonWidth, SMALL_ACTION_BUTTON_HEIGHT));
+        clearButton.setMaximumSize(new Dimension(logActionButtonWidth, SMALL_ACTION_BUTTON_HEIGHT));
         logLabelPanel.add(deleteSelectedButton);
         logLabelPanel.add(Box.createHorizontalStrut(8));
         logLabelPanel.add(clearButton);
@@ -486,8 +491,8 @@ public class SvnMergeToolWindowPanel extends JPanel {
             }
         });
         JBScrollPane logScroll = new JBScrollPane(logTable);
-        // 6 行数据 + 表头，约 168px
-        int logTableHeight = logTable.getRowHeight() * 6 + logTable.getTableHeader().getPreferredSize().height;
+        // 8 行数据 + 表头
+        int logTableHeight = logTable.getRowHeight() * 8 + logTable.getTableHeader().getPreferredSize().height;
         logScroll.setMinimumSize(new Dimension(0, logTableHeight));
         logScroll.setPreferredSize(new Dimension(0, logTableHeight));
         logScroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, logTableHeight));
@@ -497,12 +502,12 @@ public class SvnMergeToolWindowPanel extends JPanel {
         // 合并按钮行（合并 + 提交）
         commitButton = new JButton("提交");
         styleButton(commitButton, new Color(0x4A90D9));
-        commitButton.setPreferredSize(new Dimension(80, 32));
+        commitButton.setPreferredSize(new Dimension(PRIMARY_BUTTON_WIDTH, PRIMARY_BUTTON_HEIGHT));
         commitButton.addActionListener(e -> doCommit());
 
-        JPanel mergePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        mergePanel.setBorder(BorderFactory.createEmptyBorder(0, -2, 0, 0));
-        mergePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        JPanel mergePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, BUTTON_ROW_HGAP, 0));
+        mergePanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        mergePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, BUTTON_ROW_HEIGHT));
         mergePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         mergePanel.add(mergeButton);
         mergePanel.add(commitButton);
@@ -517,11 +522,14 @@ public class SvnMergeToolWindowPanel extends JPanel {
         outputArea.setLineWrap(true);
         outputArea.setWrapStyleWord(true);
         outputArea.setMargin(new Insets(6, 8, 6, 8));
+        if (outputArea.getCaret() instanceof DefaultCaret) {
+            ((DefaultCaret) outputArea.getCaret()).setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
+        }
         JBScrollPane outputScroll = new JBScrollPane(outputArea);
         outputScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         // 8 行文本高度 -> 10 行
         int outputLineHeight = outputArea.getFontMetrics(outputArea.getFont()).getHeight();
-        int outputHeight = outputLineHeight * 10 + 8;
+        int outputHeight = outputLineHeight * 8 + 8;
         outputScroll.setMinimumSize(new Dimension(0, outputHeight));
         outputScroll.setPreferredSize(new Dimension(0, outputHeight));
         outputScroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, outputHeight));
@@ -1501,6 +1509,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
         outputArea.setText("正在合并...");
 
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            if (isProjectDisposedSafe()) return;
             Set<String> mergedRevs = executor.queryMergedRevisions(workingDir, branchUrl, revisions);
             List<String> toMerge = new ArrayList<>();
             for (String rev : revisions) {
@@ -1510,7 +1519,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
             }
 
             if (toMerge.isEmpty()) {
-                SwingUtilities.invokeLater(() -> {
+                runOnUiThreadIfProjectAlive(() -> {
                     outputArea.setText("");
                     setButtonsEnabled(true);
                     JOptionPane.showMessageDialog(
@@ -1525,14 +1534,22 @@ public class SvnMergeToolWindowPanel extends JPanel {
             boolean allSuccess = true;
             Set<String> mergedSuccessRevs = new java.util.LinkedHashSet<>();
 
-            SvnCommandExecutor.Result updateResult = executor.update(workingDir);
+            appendOutputLineRealtime("开始执行 svn update...");
+            SvnCommandExecutor.Result updateResult = executor.update(workingDir, line -> {
+                String decodedLine = SvnCommandExecutor.decodeUnicodeEscapes(line);
+                if (decodedLine == null || decodedLine.trim().isEmpty()) return;
+                appendOutputLineRealtime(decodedLine);
+            });
             if (!updateResult.isSuccess()) {
-                mergeLog.append("svn update 失败：")
-                        .append(SvnCommandExecutor.decodeUnicodeEscapes(updateResult.stderr))
-                        .append("\n");
+                String updateError = SvnCommandExecutor.decodeUnicodeEscapes(updateResult.stderr);
+                StringBuilder updateFailLine = new StringBuilder("svn update 失败");
+                if (updateError != null && !updateError.trim().isEmpty()) {
+                    updateFailLine.append("：").append(updateError.trim());
+                }
+                appendOutputLineRealtime(updateFailLine.toString());
                 allSuccess = false;
             } else {
-                mergeLog.append("svn update 完成\n");
+                appendOutputLineRealtime("svn update 完成");
             }
 
             if (allSuccess) {
@@ -1551,10 +1568,6 @@ public class SvnMergeToolWindowPanel extends JPanel {
             }
 
             boolean finalAllSuccess = allSuccess;
-            String branchName = branchUrl.replaceAll("/+$", "");
-            int lastSlash = branchName.lastIndexOf('/');
-            if (lastSlash >= 0) branchName = branchName.substring(lastSlash + 1);
-            String finalBranchName = branchName;
 
             List<String> skipped = new ArrayList<>();
             for (String rev : revisions) {
@@ -1564,21 +1577,26 @@ public class SvnMergeToolWindowPanel extends JPanel {
             }
             Set<String> finalMergedSuccessRevs = mergedSuccessRevs;
 
-            SwingUtilities.invokeLater(() -> {
+            runOnUiThreadIfProjectAlive(() -> {
                 for (SvnCommandExecutor.LogEntry entry : logEntries) {
                     if (finalMergedSuccessRevs.contains(entry.revision)) {
                         entry.merged = true;
                     }
                 }
                 applyUnmergedFilter();
-                outputArea.setText(mergeLog.toString().trim());
+                String mergeSummary = mergeLog.toString().trim();
+                if (!mergeSummary.isEmpty()) {
+                    if (outputArea.getDocument().getLength() > 0) {
+                        outputArea.append("\n");
+                    }
+                    outputArea.append(mergeSummary);
+                }
                 if (!skipped.isEmpty()) {
                     outputArea.append("\n已跳过（已合并）：" + String.join(", ", skipped));
                 }
                 outputArea.putClientProperty("commitMessage", null);
                 if (finalAllSuccess) {
-                    StringBuilder commitMsg = new StringBuilder("Merged from ")
-                            .append(finalBranchName).append("\n");
+                    StringBuilder commitMsg = new StringBuilder();
                     for (String rev : toMerge) {
                         SvnCommandExecutor.LogEntry entry = findEntryByRevision(rev);
                         if (entry != null) {
@@ -1588,10 +1606,12 @@ public class SvnMergeToolWindowPanel extends JPanel {
                         }
                     }
                     String msg = commitMsg.toString().trim();
-                    Toolkit.getDefaultToolkit().getSystemClipboard()
-                            .setContents(new StringSelection(msg), null);
-                    outputArea.append("\n\n【已复制】建议的提交信息：\n" + msg);
-                    outputArea.putClientProperty("commitMessage", msg);
+                    if (!msg.isEmpty()) {
+                        Toolkit.getDefaultToolkit().getSystemClipboard()
+                                .setContents(new StringSelection(msg), null);
+                        outputArea.append("\n\n【已复制】建议的提交信息：\n" + msg);
+                        outputArea.putClientProperty("commitMessage", msg);
+                    }
                 }
                 if (!finalMergedSuccessRevs.isEmpty()) {
                     try {
@@ -1689,6 +1709,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
 
     /** 打开 IDEA 的 Commit Changes 窗口 */
     private void doCommit() {
+        if (isProjectDisposedSafe()) return;
         try {
             refreshVcsChanges(this::openCommitDialog, "刷新变更列表后打开提交窗口");
         } catch (Exception e) {
@@ -1696,18 +1717,57 @@ public class SvnMergeToolWindowPanel extends JPanel {
         }
     }
 
+    private boolean isProjectDisposedSafe() {
+        try {
+            java.lang.reflect.Method isDisposedMethod = project.getClass().getMethod("isDisposed");
+            Object result = isDisposedMethod.invoke(project);
+            return result instanceof Boolean && (Boolean) result;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private void runOnUiThreadIfProjectAlive(Runnable runnable) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (isProjectDisposedSafe()) return;
+            runnable.run();
+        });
+    }
+
+    private void appendOutputLineRealtime(String line) {
+        runOnUiThreadIfProjectAlive(() -> {
+            if (outputArea.getDocument().getLength() > 0) {
+                outputArea.append("\n");
+            }
+            outputArea.append(line);
+        });
+    }
+
     private void refreshVcsChanges(Runnable afterUpdate, String updateTitle) {
+        if (isProjectDisposedSafe()) return;
         // 外部 svn merge 后，先刷新 VFS 和变更列表，避免 IDEA 展示旧数据。
         Runnable callback = afterUpdate != null ? afterUpdate : () -> { };
-        WriteIntentReadAction.run((Runnable) () -> {
-            FileDocumentManager.getInstance().saveAllDocuments();
-            VirtualFileManager.getInstance().syncRefresh();
-            VcsDirtyScopeManager.getInstance(project).markEverythingDirty();
-        });
-        ChangeListManager.getInstance(project).invokeAfterUpdate(true, callback);
+        try {
+            ApplicationManager.getApplication().runWriteAction(() -> {
+                if (isProjectDisposedSafe()) return;
+                FileDocumentManager.getInstance().saveAllDocuments();
+                VirtualFileManager.getInstance().syncRefresh();
+                VcsDirtyScopeManager.getInstance(project).markEverythingDirty();
+            });
+            if (isProjectDisposedSafe()) return;
+            ChangeListManager.getInstance(project).invokeAfterUpdate(true, () -> {
+                if (isProjectDisposedSafe()) return;
+                callback.run();
+            });
+        } catch (Throwable t) {
+            if (!isProjectDisposedSafe()) {
+                throw t;
+            }
+        }
     }
 
     private void openCommitDialog() {
+        if (isProjectDisposedSafe()) return;
         com.intellij.openapi.actionSystem.ActionManager actionManager =
                 com.intellij.openapi.actionSystem.ActionManager.getInstance();
         com.intellij.openapi.actionSystem.AnAction action =

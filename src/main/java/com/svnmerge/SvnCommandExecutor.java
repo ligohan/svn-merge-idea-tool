@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilder;
@@ -163,6 +164,17 @@ public class SvnCommandExecutor {
      */
     public Result update(String workingDir) {
         return execute(workingDir, findSvn(), "update");
+    }
+
+    /**
+     * 执行 svn update，并实时回调输出行
+     *
+     * @param workingDir   工作目录
+     * @param outputLineCb 输出行回调（stdout/stderr）
+     * @return 命令执行结果
+     */
+    public Result update(String workingDir, Consumer<String> outputLineCb) {
+        return executeRealtime(workingDir, outputLineCb, findSvn(), "update");
     }
 
     /**
@@ -730,16 +742,83 @@ public class SvnCommandExecutor {
         }
     }
 
+    private Result executeRealtime(String workingDir, Consumer<String> outputLineCb, String... command) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            if (workingDir != null) {
+                pb.directory(new java.io.File(workingDir));
+            }
+            Map<String, String> env = pb.environment();
+            String path = env.getOrDefault("PATH", "");
+            env.put("PATH", "/usr/local/bin:/opt/homebrew/bin:/usr/bin:" + path);
+            env.put("LANG", "en_US.UTF-8");
+            env.put("LC_ALL", "en_US.UTF-8");
+            pb.redirectErrorStream(false);
+
+            Process process = pb.start();
+            java.nio.charset.Charset charset = resolveProcessCharset();
+
+            StringBuilder stdout = new StringBuilder();
+            StringBuilder stderr = new StringBuilder();
+            Thread outReader = startStreamReader(process.getInputStream(), charset, stdout, outputLineCb);
+            Thread errReader = startStreamReader(process.getErrorStream(), charset, stderr, outputLineCb);
+
+            boolean finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                joinReader(outReader);
+                joinReader(errReader);
+                return new Result(-1, stdout.toString(), "命令执行超时（" + TIMEOUT_SECONDS + "秒）");
+            }
+
+            joinReader(outReader);
+            joinReader(errReader);
+            return new Result(process.exitValue(), stdout.toString(), stderr.toString());
+        } catch (IOException e) {
+            return new Result(-1, "", "执行命令失败：" + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new Result(-1, "", "命令被中断");
+        }
+    }
+
+    private Thread startStreamReader(java.io.InputStream inputStream,
+            java.nio.charset.Charset charset,
+            StringBuilder collector,
+            Consumer<String> outputLineCb) {
+        Thread thread = new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, charset))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    synchronized (collector) {
+                        if (collector.length() > 0) collector.append("\n");
+                        collector.append(line);
+                    }
+                    if (outputLineCb != null) {
+                        outputLineCb.accept(line);
+                    }
+                }
+            } catch (IOException ignored) {
+                // 流关闭或进程结束时可能抛异常，忽略即可
+            }
+        }, "svn-stream-reader");
+        thread.setDaemon(true);
+        thread.start();
+        return thread;
+    }
+
+    private static void joinReader(Thread thread) {
+        if (thread == null) return;
+        try {
+            thread.join(1000);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private String readStream(java.io.InputStream is) throws IOException {
         // 优先尝试 UTF-8，如果系统默认编码不同则回退
-        java.nio.charset.Charset charset = StandardCharsets.UTF_8;
-        try {
-            String sysEnc = System.getProperty("sun.jnu.encoding", "");
-            if (!sysEnc.isEmpty()) {
-                charset = java.nio.charset.Charset.forName(sysEnc);
-            }
-        } catch (Exception ignored) {
-        }
+        java.nio.charset.Charset charset = resolveProcessCharset();
         StringBuilder sb = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, charset))) {
             String line;
@@ -749,5 +828,17 @@ public class SvnCommandExecutor {
             }
         }
         return sb.toString();
+    }
+
+    private java.nio.charset.Charset resolveProcessCharset() {
+        java.nio.charset.Charset charset = StandardCharsets.UTF_8;
+        try {
+            String sysEnc = System.getProperty("sun.jnu.encoding", "");
+            if (!sysEnc.isEmpty()) {
+                charset = java.nio.charset.Charset.forName(sysEnc);
+            }
+        } catch (Exception ignored) {
+        }
+        return charset;
     }
 }
