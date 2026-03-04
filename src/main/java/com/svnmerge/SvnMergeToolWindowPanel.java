@@ -309,7 +309,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
         logLabelPanel.add(Box.createHorizontalGlue());
         unmergedFilterCheckBox = new JCheckBox("未合并");
         logLabelPanel.add(unmergedFilterCheckBox);
-        logLabelPanel.add(Box.createHorizontalStrut(4));
+        logLabelPanel.add(Box.createHorizontalStrut(8));
         JButton deleteSelectedButton = new JButton("删除");
         deleteSelectedButton.setMargin(new Insets(0, 4, 0, 4));
         deleteSelectedButton.setFont(deleteSelectedButton.getFont().deriveFont(Font.PLAIN, 12f));
@@ -326,7 +326,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
         clearButton.setPreferredSize(new Dimension(logActionButtonWidth, 20));
         clearButton.setMaximumSize(new Dimension(logActionButtonWidth, 20));
         logLabelPanel.add(deleteSelectedButton);
-        logLabelPanel.add(Box.createHorizontalStrut(4));
+        logLabelPanel.add(Box.createHorizontalStrut(8));
         logLabelPanel.add(clearButton);
         contentPanel.add(logLabelPanel);
         contentPanel.add(Box.createVerticalStrut(4));
@@ -383,7 +383,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
 
         // 表头勾选框：全选/全不选
         JCheckBox headerCheckBox = new JCheckBox();
-        headerCheckBox.setSelected(true);
+        headerCheckBox.setSelected(false);
         headerCheckBox.setHorizontalAlignment(SwingConstants.CENTER);
         Runnable refreshHeaderCheckBoxState = () -> {
             int total = logTableModel.getRowCount();
