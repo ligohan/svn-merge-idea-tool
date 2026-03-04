@@ -157,6 +157,19 @@ public class SvnCommandExecutor {
     }
 
     /**
+     * 执行 svn merge，并实时回调输出行
+     *
+     * @param workingDir   工作目录
+     * @param branchUrl    源分支 URL
+     * @param revision     版本号
+     * @param outputLineCb 输出行回调（stdout/stderr）
+     * @return 命令执行结果
+     */
+    public Result merge(String workingDir, String branchUrl, String revision, Consumer<String> outputLineCb) {
+        return executeRealtime(workingDir, outputLineCb, findSvn(), "merge", "-c", revision, branchUrl);
+    }
+
+    /**
      * 执行 svn update
      *
      * @param workingDir 工作目录

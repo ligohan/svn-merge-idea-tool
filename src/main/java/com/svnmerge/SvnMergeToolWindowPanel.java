@@ -1071,12 +1071,12 @@ public class SvnMergeToolWindowPanel extends JPanel {
                         com.intellij.openapi.ui.WindowWrapper.Mode.NON_MODAL,
                         ownerWindow,
                         wrapper -> com.intellij.openapi.util.Disposer.register(wrapper, () ->
-                                SwingUtilities.invokeLater(() -> {
-                                    if (ownerWindow != null && ownerWindow.isShowing()) {
-                                        ownerWindow.toFront();
+                                {
+                                    if (ownerWindow == null || !ownerWindow.isShowing()) return;
+                                    if (!ownerWindow.requestFocusInWindow()) {
                                         ownerWindow.requestFocus();
                                     }
-                                })));
+                                }));
                 com.intellij.diff.DiffManager.getInstance().showDiff(project, request, hints);
             });
         });
@@ -1171,6 +1171,15 @@ public class SvnMergeToolWindowPanel extends JPanel {
             }
         }
         return revisions;
+    }
+
+    private static long parseRevisionNumber(String revision) {
+        if (revision == null) return Long.MAX_VALUE;
+        try {
+            return Long.parseLong(revision.trim());
+        } catch (NumberFormatException ignored) {
+            return Long.MAX_VALUE;
+        }
     }
 
     private String getBranchUrl() {
@@ -1558,6 +1567,14 @@ public class SvnMergeToolWindowPanel extends JPanel {
                     toMerge.add(rev);
                 }
             }
+            toMerge.sort((a, b) -> {
+                long aNum = parseRevisionNumber(a);
+                long bNum = parseRevisionNumber(b);
+                if (aNum != bNum) {
+                    return Long.compare(aNum, bNum);
+                }
+                return String.valueOf(a).compareTo(String.valueOf(b));
+            });
 
             if (toMerge.isEmpty()) {
                 runOnUiThreadIfProjectAlive(() -> {
@@ -1571,7 +1588,6 @@ public class SvnMergeToolWindowPanel extends JPanel {
                 return;
             }
 
-            StringBuilder mergeLog = new StringBuilder();
             boolean allSuccess = true;
             Set<String> mergedSuccessRevs = new java.util.LinkedHashSet<>();
 
@@ -1593,16 +1609,23 @@ public class SvnMergeToolWindowPanel extends JPanel {
                 appendOutputLineRealtime("svn update 完成");
             }
 
+            appendOutputLineRealtime("svn merge 开始");
             if (allSuccess) {
                 for (String rev : toMerge) {
-                    SvnCommandExecutor.Result result = executor.merge(workingDir, branchUrl, rev);
+                    appendOutputLineRealtime("开始合并 r" + rev + "...");
+                    SvnCommandExecutor.Result result = executor.merge(workingDir, branchUrl, rev, line -> {
+                        String decodedLine = SvnCommandExecutor.decodeUnicodeEscapes(line);
+                        if (decodedLine == null || decodedLine.trim().isEmpty()) return;
+                        appendOutputLineRealtime(decodedLine);
+                    });
                     if (result.isSuccess()) {
-                        mergeLog.append(rev).append(" 合并成功\n");
+                        appendOutputLineRealtime(rev + " 合并成功");
                         mergedSuccessRevs.add(rev);
                     } else {
-                        mergeLog.append(rev).append(" 合并失败：")
-                                .append(SvnCommandExecutor.decodeUnicodeEscapes(result.stderr))
-                                .append("\n");
+                        String mergeError = SvnCommandExecutor.decodeUnicodeEscapes(result.stderr);
+                        String failLine = rev + " 合并失败"
+                                + (mergeError == null || mergeError.trim().isEmpty() ? "" : "：" + mergeError.trim());
+                        appendOutputLineRealtime(failLine);
                         allSuccess = false;
                     }
                 }
@@ -1625,13 +1648,6 @@ public class SvnMergeToolWindowPanel extends JPanel {
                     }
                 }
                 applyUnmergedFilter();
-                String mergeSummary = mergeLog.toString().trim();
-                if (!mergeSummary.isEmpty()) {
-                    if (outputArea.getDocument().getLength() > 0) {
-                        outputArea.append("\n");
-                    }
-                    outputArea.append(mergeSummary);
-                }
                 if (!skipped.isEmpty()) {
                     outputArea.append("\n已跳过（已合并）：" + String.join(", ", skipped));
                 }
