@@ -342,7 +342,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
         contentPanel.add(logLabelPanel);
         contentPanel.add(Box.createVerticalStrut(4));
         logTableModel = new DefaultTableModel(
-                new String[]{"", "版本号", "作者", "提交信息（经提取)", "状态"}, 0) {
+                new String[]{"", "版本号", "作者", "提交信息（经提取)", "提交时间", "状态"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return column == 0; // 只有勾选列可编辑
@@ -385,9 +385,12 @@ public class SvnMergeToolWindowPanel extends JPanel {
         logTable.getColumnModel().getColumn(2).setPreferredWidth(100);
         logTable.getColumnModel().getColumn(2).setMaxWidth(150);
         logTable.getColumnModel().getColumn(3).setPreferredWidth(300);
-        logTable.getColumnModel().getColumn(4).setPreferredWidth(60);
-        logTable.getColumnModel().getColumn(4).setMinWidth(60);
-        logTable.getColumnModel().getColumn(4).setMaxWidth(60);
+        logTable.getColumnModel().getColumn(4).setPreferredWidth(110);
+        logTable.getColumnModel().getColumn(4).setMinWidth(110);
+        logTable.getColumnModel().getColumn(4).setMaxWidth(110);
+        logTable.getColumnModel().getColumn(5).setPreferredWidth(60);
+        logTable.getColumnModel().getColumn(5).setMinWidth(60);
+        logTable.getColumnModel().getColumn(5).setMaxWidth(60);
         // 固定其余列，仅让“提交信息”列随表格宽度变化。
         logTable.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
         logTable.setRowHeight(24);
@@ -438,8 +441,8 @@ public class SvnMergeToolWindowPanel extends JPanel {
                 }
             }
         });
-        // 状态列着色渲染器
-        logTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
+        // 状态列着色渲染器（第5列）
+        logTable.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
                     boolean isSelected, boolean hasFocus, int row, int column) {
@@ -486,11 +489,12 @@ public class SvnMergeToolWindowPanel extends JPanel {
                 StringBuilder sb = new StringBuilder();
                 for (int row : rows) {
                     if (sb.length() > 0) sb.append("\n");
-                    // 版本号、作者、提交信息、状态
+                    // 版本号、作者、提交信息、提交时间、状态
                     sb.append(logTable.getValueAt(row, 1)).append("\t")
                       .append(logTable.getValueAt(row, 2)).append("\t")
                       .append(logTable.getValueAt(row, 3)).append("\t")
-                      .append(logTable.getValueAt(row, 4));
+                      .append(logTable.getValueAt(row, 4)).append("\t")
+                      .append(logTable.getValueAt(row, 5));
                 }
                 Toolkit.getDefaultToolkit().getSystemClipboard()
                         .setContents(new StringSelection(sb.toString()), null);
@@ -626,8 +630,12 @@ public class SvnMergeToolWindowPanel extends JPanel {
     /** 建议提交信息格式：提交信息 | 作者 | 版本号，表格仅展示第一段提交信息 */
     private static final java.util.regex.Pattern SUGGESTED_COMMIT_MESSAGE_PATTERN =
             java.util.regex.Pattern.compile("^\\s*([^|\\r\\n]+?)\\s*\\|\\s*[^|\\r\\n]+\\s*\\|\\s*[^|\\r\\n]+\\s*$");
-    private static final DateTimeFormatter COMMIT_TIME_DISPLAY_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    /** 表格显示用的提交时间格式（简短） */
+    private static final DateTimeFormatter COMMIT_TIME_TABLE_FORMATTER =
+            DateTimeFormatter.ofPattern("yy/MM/dd HH:mm");
+    /** Tooltip 显示用的提交时间格式（完整） */
+    private static final DateTimeFormatter COMMIT_TIME_TOOLTIP_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
 
     private static String displayMessage(String message) {
         if (message == null) return null;
@@ -665,15 +673,18 @@ public class SvnMergeToolWindowPanel extends JPanel {
     private static String buildCommitTooltip(SvnCommandExecutor.LogEntry entry) {
         if (entry == null) return null;
         String message = entry.message == null ? "" : entry.message;
-        String displayTime = formatCommitTime(entry.commitTime);
+        String revision = entry.revision == null ? "" : entry.revision;
+        String displayTime = formatCommitTimeForTooltip(entry.commitTime);
         String author = entry.author == null ? "" : entry.author;
         String body = escapeHtml(message)
                 .replace("\r\n", "\n")
                 .replace("\r", "\n")
                 .replace("\n", "<br/>");
         return "<html>"
-                + "时间：" + escapeHtml(displayTime) + "<br/>"
+                + "提交时间：" + escapeHtml(displayTime) + "<br/>"
+                + "版本号：" + escapeHtml(revision) + "<br/>"
                 + "作者：" + escapeHtml(author) + "<br/>"
+                + "<br/>"
                 + "Commit Message：" + "<br/>"
                 + body
                 + "</html>";
@@ -695,7 +706,21 @@ public class SvnMergeToolWindowPanel extends JPanel {
         try {
             return OffsetDateTime.parse(trimmed)
                     .atZoneSameInstant(ZoneId.systemDefault())
-                    .format(COMMIT_TIME_DISPLAY_FORMATTER);
+                    .format(COMMIT_TIME_TABLE_FORMATTER);
+        } catch (DateTimeParseException ignored) {
+            return trimmed;
+        }
+    }
+
+    /** 格式化提交时间用于 tooltip 显示（完整格式） */
+    private static String formatCommitTimeForTooltip(String commitTime) {
+        if (commitTime == null) return "";
+        String trimmed = commitTime.trim();
+        if (trimmed.isEmpty()) return "";
+        try {
+            return OffsetDateTime.parse(trimmed)
+                    .atZoneSameInstant(ZoneId.systemDefault())
+                    .format(COMMIT_TIME_TOOLTIP_FORMATTER);
         } catch (DateTimeParseException ignored) {
             return trimmed;
         }
@@ -1335,6 +1360,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
                             entry.revision,
                             entry.author,
                             displayMessage(entry.message),
+                            formatCommitTime(entry.commitTime),
                             entry.merged ? "已合并" : "未合并"
                     });
                 }
@@ -1365,6 +1391,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
                     entry.revision,
                     entry.author,
                     displayMessage(entry.message),
+                    formatCommitTime(entry.commitTime),
                     entry.merged ? "已合并" : "未合并"
             });
         }
@@ -1434,6 +1461,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
                                 entry.revision,
                                 entry.author,
                                 displayMessage(entry.message),
+                                formatCommitTime(entry.commitTime),
                                 entry.merged ? "已合并" : "未合并"
                         });
                     }
@@ -1517,6 +1545,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
                             entry.revision,
                             entry.author,
                             displayMessage(entry.message),
+                            formatCommitTime(entry.commitTime),
                             entry.merged ? "已合并" : "未合并"
                     });
                 }
@@ -1816,6 +1845,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
                         entry.revision,
                         entry.author,
                         displayMessage(entry.message),
+                        formatCommitTime(entry.commitTime),
                         entry.merged ? "已合并" : "未合并"
                 });
             }
