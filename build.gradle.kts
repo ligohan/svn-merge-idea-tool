@@ -15,7 +15,12 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        local("/Applications/IntelliJ IDEA.app")
+        val localIdePath = "/Applications/IntelliJ IDEA.app"
+        if (file(localIdePath).exists()) {
+            local(localIdePath)
+        } else {
+            intellijIdea("2024.1.7")
+        }
         pluginVerifier()
     }
 }
@@ -36,5 +41,9 @@ intellijPlatform {
         ideaVersion {
             sinceBuild = "241"
         }
+    }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
     }
 }
