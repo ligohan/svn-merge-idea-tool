@@ -342,7 +342,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
         contentPanel.add(logLabelPanel);
         contentPanel.add(Box.createVerticalStrut(4));
         logTableModel = new DefaultTableModel(
-                new String[]{"", "版本号", "作者", "提交信息", "状态"}, 0) {
+                new String[]{"", "版本号", "作者", "提交信息（经提取)", "状态"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return column == 0; // 只有勾选列可编辑
@@ -616,19 +616,50 @@ public class SvnMergeToolWindowPanel extends JPanel {
         return null;
     }
 
-    /** 表格显示用的提交信息，以 "Merge(d) from/From xxx" 后跟空格或换行开头的，将该前缀替换为 "……" */
+    /** 表格显示用的提交信息，以 "Merge(d) from/From xxx" 开头时去掉该前缀 */
     private static final java.util.regex.Pattern MERGE_PREFIX_PATTERN =
-            java.util.regex.Pattern.compile("^Merged? [Ff]rom \\S+([ \\t\\r\\n])", java.util.regex.Pattern.DOTALL);
+            java.util.regex.Pattern.compile("^Merged? [Ff]rom\\s+\\S+\\s*");
+    /** 行尾包含一个或多个 "[from revision XXX]" 时去掉全部后缀（中间可有或没有空白） */
+    private static final java.util.regex.Pattern FROM_REVISION_SUFFIX_PATTERN =
+            java.util.regex.Pattern.compile("\\s*(?:\\[from\\s+revision\\s+[0-9,]+]\\s*)+$",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
+    /** 建议提交信息格式：提交信息 | 作者 | 版本号，表格仅展示第一段提交信息 */
+    private static final java.util.regex.Pattern SUGGESTED_COMMIT_MESSAGE_PATTERN =
+            java.util.regex.Pattern.compile("^\\s*([^|\\r\\n]+?)\\s*\\|\\s*[^|\\r\\n]+\\s*\\|\\s*[^|\\r\\n]+\\s*$");
     private static final DateTimeFormatter COMMIT_TIME_DISPLAY_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private static String displayMessage(String message) {
         if (message == null) return null;
-        java.util.regex.Matcher m = MERGE_PREFIX_PATTERN.matcher(message);
-        if (m.find()) {
-            return "……" + m.group(1) + message.substring(m.end());
+        String normalized = message.replace("\r\n", "\n").replace("\r", "\n");
+        String[] lines = normalized.split("\n", -1);
+        StringBuilder converted = new StringBuilder();
+        boolean hasContentLine = false;
+        for (int i = 0; i < lines.length; i++) {
+            String originalLine = lines[i];
+            String convertedLine = convertMessageLine(originalLine);
+            if (convertedLine.trim().isEmpty()) {
+                continue;
+            }
+            if (hasContentLine) converted.append('\n');
+            converted.append(convertedLine);
+            hasContentLine = true;
         }
-        return message;
+        return converted.toString();
+    }
+
+    private static String convertMessageLine(String line) {
+        String display = line;
+        java.util.regex.Matcher m = MERGE_PREFIX_PATTERN.matcher(display);
+        if (m.find()) {
+            display = display.substring(m.end());
+        }
+        display = FROM_REVISION_SUFFIX_PATTERN.matcher(display).replaceFirst("");
+        java.util.regex.Matcher suggested = SUGGESTED_COMMIT_MESSAGE_PATTERN.matcher(display);
+        if (suggested.matches()) {
+            return suggested.group(1).trim();
+        }
+        return display;
     }
 
     private static String buildCommitTooltip(SvnCommandExecutor.LogEntry entry) {
@@ -1739,7 +1770,9 @@ public class SvnMergeToolWindowPanel extends JPanel {
                     for (String rev : toMerge) {
                         SvnCommandExecutor.LogEntry entry = findEntryByRevision(rev);
                         if (entry != null) {
-                            commitMsg.append(entry.message).append(" | ")
+                            String displayMsg = displayMessage(entry.message);
+                            if (displayMsg == null) displayMsg = "";
+                            commitMsg.append(displayMsg.trim()).append(" | ")
                                     .append(entry.author).append(" | ")
                                     .append(entry.revision).append("\n");
                         }

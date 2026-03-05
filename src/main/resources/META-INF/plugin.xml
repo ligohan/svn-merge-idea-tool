@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.svnmerge.helper</id>
     <name>SVN Merge Helper</name>
-    <vendor>ligohan</vendor>
+    <vendor>lijun</vendor>
     <description><![CDATA[
         <h2>SVN Merge Helper</h2>
         <br/>
