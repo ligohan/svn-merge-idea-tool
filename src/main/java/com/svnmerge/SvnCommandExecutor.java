@@ -38,6 +38,10 @@ public class SvnCommandExecutor {
     };
 
     private volatile String svnPath;
+    /** svn 返回“版本不存在”时的常见错误特征 */
+    private static final Pattern REVISION_NOT_FOUND_PATTERN = Pattern.compile(
+            "(E160006|No such revision|版本.*不存在|无效的版本|is not a valid revision)",
+            Pattern.CASE_INSENSITIVE);
 
     /**
      * 查找可用的 svn 可执行文件路径
@@ -225,11 +229,14 @@ public class SvnCommandExecutor {
      *
      * @param branchUrl 源分支 URL
      * @param revision  版本号
-     * @return LogEntry，查询失败时 author 为空
+     * @return LogEntry；版本不存在时返回 null；查询失败时 author 为空
      */
     public LogEntry queryLogVerbose(String branchUrl, String revision) {
         Result result = execute(null, findSvn(), "log", "--xml", "-v", "-r", revision, branchUrl);
         if (!result.isSuccess()) {
+            if (isRevisionNotFoundError(result.stderr)) {
+                return null;
+            }
             return new LogEntry(revision, "", "查询失败：" + result.stderr, "", new ArrayList<>());
         }
         return parseLogXml(result.stdout, revision);
@@ -245,7 +252,7 @@ public class SvnCommandExecutor {
             Document doc = builder.parse(new InputSource(new StringReader(xmlOutput)));
             NodeList entries = doc.getElementsByTagName("logentry");
             if (entries.getLength() == 0) {
-                return new LogEntry(revision, "", "未找到日志", "", new ArrayList<>());
+                return null;
             }
             Element entry = (Element) entries.item(0);
             String author = getTagText(entry, "author");
@@ -264,6 +271,12 @@ public class SvnCommandExecutor {
         } catch (Exception e) {
             return new LogEntry(revision, "", "XML 解析失败：" + e.getMessage(), "", new ArrayList<>());
         }
+    }
+
+    private boolean isRevisionNotFoundError(String stderr) {
+        if (stderr == null || stderr.trim().isEmpty()) return false;
+        String decoded = decodeUnicodeEscapes(stderr);
+        return REVISION_NOT_FOUND_PATTERN.matcher(decoded).find();
     }
 
     private static String getTagText(Element parent, String tagName) {

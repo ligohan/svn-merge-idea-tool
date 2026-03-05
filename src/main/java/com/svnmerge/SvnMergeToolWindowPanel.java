@@ -714,7 +714,9 @@ public class SvnMergeToolWindowPanel extends JPanel {
         if (entry.changedFiles.isEmpty()) {
             ApplicationManager.getApplication().executeOnPooledThread(() -> {
                 SvnCommandExecutor.LogEntry detailed = executor.queryLogVerbose(branchUrl, entry.revision);
-                entry.changedFiles.addAll(detailed.changedFiles);
+                if (detailed != null) {
+                    entry.changedFiles.addAll(detailed.changedFiles);
+                }
                 SwingUtilities.invokeLater(() -> showChangedFilesDialog(entry, branchUrl));
             });
         } else {
@@ -1410,6 +1412,9 @@ public class SvnMergeToolWindowPanel extends JPanel {
             List<SvnCommandExecutor.LogEntry> entries = new ArrayList<>();
             for (String rev : finalRevisions) {
                 SvnCommandExecutor.LogEntry entry = executor.queryLogVerbose(branchUrl, rev);
+                if (entry == null) {
+                    continue;
+                }
                 if (mergedRevs.contains(rev)) {
                     entry.merged = true;
                 }
