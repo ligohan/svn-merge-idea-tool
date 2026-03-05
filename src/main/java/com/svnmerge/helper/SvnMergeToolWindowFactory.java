@@ -1,4 +1,4 @@
-package com.svnmergehelper;
+package com.svnmerge.helper;
 
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
