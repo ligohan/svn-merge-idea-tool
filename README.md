@@ -2,6 +2,9 @@
 
 IntelliJ IDEA 插件，简化 SVN 分支合并流程。
 
+## 下载
+IDEA 插件市场：https://plugins.jetbrains.com/plugin/30466-svn-merge-helper
+
 ## 预览
 ![main.png](src/main/resources/image/shortcuts/main.png)
 ![changedFiles.png](src/main/resources/image/shortcuts/changedFiles.png)
