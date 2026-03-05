@@ -1,4 +1,4 @@
-package com.svnmerge;
+package com.svnmergehelper;
 
 import java.io.BufferedReader;
 import java.io.IOException;

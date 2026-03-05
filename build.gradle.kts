@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.11.0"
 }
 
-group = "com.svnmerge"
+group = "com.github.svn-merge-helper"
 version = "1.0.4"
 
 repositories {

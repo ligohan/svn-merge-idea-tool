@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>com.svnmerge.helper</id>
+    <id>com.github.svn-merge-helper</id>
     <name>SVN Merge Helper</name>
     <vendor>lijun</vendor>
     <description><![CDATA[
@@ -30,6 +30,6 @@
         <toolWindow id="SVN Merge Helper"
                     anchor="right"
                     icon="/image/icons/svnMerge.svg"
-                    factoryClass="com.svnmerge.SvnMergeToolWindowFactory"/>
+                    factoryClass="com.svnmergehelper.SvnMergeToolWindowFactory"/>
     </extensions>
 </idea-plugin>

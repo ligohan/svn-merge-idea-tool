@@ -1,4 +1,4 @@
-package com.svnmerge;
+package com.svnmergehelper;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.ide.util.PropertiesComponent;
