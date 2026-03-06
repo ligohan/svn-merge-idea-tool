@@ -1571,7 +1571,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
         List<String> revisions = new ArrayList<>();
         for (int i = 0; i < logTableModel.getRowCount(); i++) {
             Boolean checked = (Boolean) logTableModel.getValueAt(i, 0);
-            String status = String.valueOf(logTableModel.getValueAt(i, 4));
+            String status = String.valueOf(logTableModel.getValueAt(i, 5));
             if (Boolean.TRUE.equals(checked) && "未合并".equals(status)) {
                 String rev = String.valueOf(logTableModel.getValueAt(i, 1));
                 if (!rev.isEmpty()) {
