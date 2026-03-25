@@ -1695,10 +1695,8 @@ public class SvnMergeToolWindowPanel extends JPanel {
                         String decodedLine = SvnCommandExecutor.decodeUnicodeEscapes(line);
                         if (decodedLine == null || decodedLine.trim().isEmpty()) return;
                         appendOutputLineRealtime(decodedLine);
-                        // 检测冲突：svn merge 输出中以 "C " 开头表示内容冲突
-                        String trimmed = decodedLine.trim();
-                        if (trimmed.matches("^C\\s+.*") || trimmed.matches("^TC\\s+.*")) {
-                            conflictLines.add(trimmed);
+                        if (SvnConflictStatusDetector.hasConflictMarker(decodedLine)) {
+                            conflictLines.add(decodedLine.trim());
                         }
                     });
                     if (result.isSuccess() && conflictLines.isEmpty()) {
@@ -1754,8 +1752,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
                         boolean stillHasConflict = false;
                         if (statusResult.isSuccess() && statusResult.stdout != null) {
                             for (String statusLine : statusResult.stdout.split("\n")) {
-                                String st = statusLine.trim();
-                                if (st.startsWith("C ") || (st.length() > 6 && st.charAt(6) == 'C')) {
+                                if (SvnConflictStatusDetector.hasConflictMarker(statusLine)) {
                                     stillHasConflict = true;
                                     break;
                                 }
