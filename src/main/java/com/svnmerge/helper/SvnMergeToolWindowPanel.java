@@ -1818,7 +1818,11 @@ public class SvnMergeToolWindowPanel extends JPanel {
                 }
                 if (!finalMergedSuccessRevs.isEmpty()) {
                     try {
-                        refreshVcsChanges(() -> { }, "合并完成后刷新变更列表");
+                        refreshVcsChanges(() -> {
+                            if (finalAllSuccess) {
+                                openCommitDialog();
+                            }
+                        }, "合并完成后刷新变更列表");
                     } catch (Exception refreshError) {
                         outputArea.append("\n刷新变更列表失败：" + refreshError.getMessage());
                     }
