@@ -1747,23 +1747,27 @@ public class SvnMergeToolWindowPanel extends JPanel {
                             allSuccess = false;
                             break;
                         }
-                        // 检查冲突是否已全部解决
-                        SvnCommandExecutor.Result statusResult = executor.status(workingDir);
-                        boolean stillHasConflict = false;
-                        if (statusResult.isSuccess() && statusResult.stdout != null) {
-                            for (String statusLine : statusResult.stdout.split("\n")) {
-                                if (SvnConflictStatusDetector.hasConflictMarker(statusLine)) {
-                                    stillHasConflict = true;
-                                    break;
+                        // 检查冲突是否已全部解决（仅在还有后续版本需要合并时检查）
+                        if (remainCount > 0) {
+                            SvnCommandExecutor.Result statusResult = executor.status(workingDir);
+                            boolean stillHasConflict = false;
+                            if (statusResult.isSuccess() && statusResult.stdout != null) {
+                                for (String statusLine : statusResult.stdout.split("\n")) {
+                                    if (SvnConflictStatusDetector.hasConflictMarker(statusLine)) {
+                                        stillHasConflict = true;
+                                        break;
+                                    }
                                 }
                             }
+                            if (stillHasConflict) {
+                                appendOutputLineRealtime("仍有未解决的冲突，停止后续合并");
+                                allSuccess = false;
+                                break;
+                            }
+                            appendOutputLineRealtime("冲突已解决，继续合并下一个版本");
+                        } else {
+                            appendOutputLineRealtime("冲突已处理，准备提交");
                         }
-                        if (stillHasConflict) {
-                            appendOutputLineRealtime("仍有未解决的冲突，停止后续合并");
-                            allSuccess = false;
-                            break;
-                        }
-                        appendOutputLineRealtime("冲突已解决，继续合并下一个版本");
                     } else {
                         String mergeError = SvnCommandExecutor.decodeUnicodeEscapes(result.stderr);
                         String failLine = "r" + rev + " 合并失败"
