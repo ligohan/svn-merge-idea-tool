@@ -184,6 +184,16 @@ public class SvnCommandExecutor {
     }
 
     /**
+     * 递归标记工作副本中所有冲突为已解决（使用当前工作副本内容）
+     *
+     * @param workingDir 工作目录
+     * @return 命令执行结果
+     */
+    public Result resolveAll(String workingDir) {
+        return execute(workingDir, findSvn(), "resolve", "--accept", "working", "-R", ".");
+    }
+
+    /**
      * 执行 svn update
      *
      * @param workingDir 工作目录

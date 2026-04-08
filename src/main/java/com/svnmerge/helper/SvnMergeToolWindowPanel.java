@@ -1687,6 +1687,7 @@ public class SvnMergeToolWindowPanel extends JPanel {
 
             appendOutputLineRealtime("svn merge 开始");
             if (allSuccess) {
+                mergeLoop:
                 for (int ri = 0; ri < toMerge.size(); ri++) {
                     String rev = toMerge.get(ri);
                     appendOutputLineRealtime("开始合并 r" + rev + "（" + (ri + 1) + "/" + toMerge.size() + "）...");
@@ -1749,22 +1750,58 @@ public class SvnMergeToolWindowPanel extends JPanel {
                         }
                         // 检查冲突是否已全部解决（仅在还有后续版本需要合并时检查）
                         if (remainCount > 0) {
-                            SvnCommandExecutor.Result statusResult = executor.status(workingDir);
-                            boolean stillHasConflict = false;
-                            if (statusResult.isSuccess() && statusResult.stdout != null) {
-                                for (String statusLine : statusResult.stdout.split("\n")) {
-                                    if (SvnConflictStatusDetector.hasConflictMarker(statusLine)) {
-                                        stillHasConflict = true;
-                                        break;
+                            // 循环检查冲突状态，直到全部解决或用户选择停止
+                            while (true) {
+                                // 先尝试自动 resolve（使用工作副本内容标记冲突已解决）
+                                SvnCommandExecutor.Result resolveResult = executor.resolveAll(workingDir);
+                                if (!resolveResult.isSuccess()) {
+                                    appendOutputLineRealtime("自动标记冲突解决失败：" + resolveResult.stderr);
+                                }
+
+                                SvnCommandExecutor.Result statusResult = executor.status(workingDir);
+                                java.util.List<String> stillConflictLines = new java.util.ArrayList<>();
+                                if (statusResult.isSuccess() && statusResult.stdout != null) {
+                                    for (String statusLine : statusResult.stdout.split("\n")) {
+                                        if (SvnConflictStatusDetector.hasConflictMarker(statusLine)) {
+                                            stillConflictLines.add(statusLine.trim());
+                                        }
                                     }
                                 }
+                                if (stillConflictLines.isEmpty()) {
+                                    appendOutputLineRealtime("冲突已解决，继续合并下一个版本");
+                                    break;
+                                }
+                                // 仍有冲突，输出具体文件并重新等待用户处理
+                                appendOutputLineRealtime("以下文件仍有未解决的冲突：");
+                                for (String cl : stillConflictLines) {
+                                    appendOutputLineRealtime("  " + cl);
+                                }
+                                java.util.concurrent.CountDownLatch recheckLatch = new java.util.concurrent.CountDownLatch(1);
+                                java.util.concurrent.atomic.AtomicBoolean recheckContinue = new java.util.concurrent.atomic.AtomicBoolean(false);
+                                runOnUiThreadIfProjectAlive(() -> {
+                                    try {
+                                        refreshVcsChanges(() -> openResolveConflictsDialog(), "刷新变更列表");
+                                    } catch (Exception ex) {
+                                        appendOutputLineRealtime("刷新变更列表失败：" + ex.getMessage());
+                                    }
+                                    com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(() -> {
+                                        showConflictContinueDialog(recheckContinue, recheckLatch);
+                                    });
+                                });
+                                try {
+                                    recheckLatch.await();
+                                } catch (InterruptedException ie2) {
+                                    Thread.currentThread().interrupt();
+                                    appendOutputLineRealtime("等待冲突解决被中断");
+                                    allSuccess = false;
+                                    break mergeLoop;
+                                }
+                                if (!recheckContinue.get()) {
+                                    appendOutputLineRealtime("用户选择停止合并");
+                                    allSuccess = false;
+                                    break mergeLoop;
+                                }
                             }
-                            if (stillHasConflict) {
-                                appendOutputLineRealtime("仍有未解决的冲突，停止后续合并");
-                                allSuccess = false;
-                                break;
-                            }
-                            appendOutputLineRealtime("冲突已解决，继续合并下一个版本");
                         } else {
                             appendOutputLineRealtime("冲突已处理，准备提交");
                         }
